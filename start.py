@@ -64,9 +64,7 @@ async def process_time(message: types.Message, state: FSMContext):
     """
     time_str = message.text
     try:
-        alarm_time = time_str.replace(" ", ":")
-        print(time_str)
-        reminder_time = datetime.strptime(alarm_time, "%H:%M").time()
+        reminder_time = datetime.strptime(time_str, "%H:%M").time().replace(" ", ":")
         now = datetime.now()
         reminder_datetime = datetime.combine(now.date(), reminder_time)
         if reminder_datetime < now:
@@ -74,7 +72,13 @@ async def process_time(message: types.Message, state: FSMContext):
 
         data = await state.get_data()
         task = data["task"]
-        tasks[message.chat.id] = (task, reminder_datetime)
+
+        # Проверяем, есть ли уже записи для данного чата
+        if message.chat.id in tasks:
+            tasks[message.chat.id].append((task, reminder_datetime))
+        else:
+            tasks[message.chat.id] = [(task, reminder_datetime)]
+
         await message.answer(
             f'Отлично! Напомню вам о задаче "{task}" в {reminder_datetime.strftime("%H:%M")}.'
         )
@@ -111,14 +115,11 @@ async def cancel(message: types.Message, state: FSMContext):
 
 @dp.message(Command("show_tasks"))
 async def show_tasks(message: types.Message):
-    if tasks:
-        # task_list = []
-        for chat_id, (task, reminder_time) in tasks.items():
-            msg = (
-                f"Chat ID: {chat_id} Time: {reminder_time.strftime('%H:%M')}\n"
-                f"Task: `{task}`"
-            )
-            await bot.send_message(chat_id=message.chat.id, text=msg)
+    if message.chat.id in tasks and tasks[message.chat.id]:
+        task_list = []
+        for task, reminder_time in tasks[message.chat.id]:
+            task_list.append(f"Task: {task}\nTime: {reminder_time.strftime('%H:%M')}\n")
+        await message.answer("\n".join(task_list))
     else:
         await message.answer("No tasks found.")
 
